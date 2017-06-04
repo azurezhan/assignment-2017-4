@@ -1,0 +1,381 @@
+---
+title: "Assignment_4_Hanjie WANG"
+author: "Hanjie WANG"
+date: "May 25, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Set up
+```{r, include=FALSE}
+library(tidyverse)
+library(AER)
+library(broom)
+library(plm)
+library(rdd)
+```
+
+### Bailey 8.2 @Bailey2016a
+```{r}
+peacecorp<-read_csv('./Data/PeaceCorpsHW.csv')
+```
+
+(a) Before looking at the data, I hypotehsize that the unemployrate (state unemployment rate) positively correlates with appspc (Applications to the Peace Corps from each state per capita). Put differently, the higher the unemplyment rate, the more application to the Peace Corps.
+I hypothesize in this way because I think young people will be glad to seek at least some job experience when jobs are scarce. And Peace Corps offers them both the job opportunity and the opportunity to work abroad and acquire experience. 
+
+(b) 
+```{r}
+reg82b<- lm(appspc~unemployrate+factor(year), data=peacecorp)
+summary(reg82b)
+```
+The results suggests that on average, state unemployment rate will increase the peace corps application by 1.107. And each year has different impact on the application. None of the results is statistically significant, hence suggesting we accept the null hypothesis that neither unemployment rate nor year-specific effects have any influence on the application to peace corps. 
+The problem here is that it does differentiate states but take them aggregately. But each states have different economic characteristics and population profile, both of which might influence the unemployment rate. Failing to account for this differences, this pooled regression is problematic. 
+
+(c)
+```{r}
+ggplot(data=peacecorp, mapping = aes(x=unemployrate, y=appspc))+
+  geom_smooth(method=lm)+
+  geom_point()+
+  geom_text(aes(label=stateshort))
+```
+The plot looks ugly, but it clearly suggests that DIS (District of Columbia) is the outlier that the peace corpore application is over 300. (Other seemingly outliers are VER and ORE.) This would bias the estimate on unemployment rate by magnifying it at the same unemployment rate. 
+
+```{r}
+peacecorp_c<- filter(peacecorp, stateshort !="DIS")
+ggplot(data=peacecorp_c, mapping = aes(x=unemployrate, y=appspc))+
+  geom_smooth(method=lm)+
+  geom_point()+
+  geom_text(aes(label=stateshort))
+
+```
+The second scatterplot takes out the unusual state displays a concentration of points and the regression line gets flatter as the bias of DIC is removed. More specifically, the uprising trend is reversed to a downward trend. Moreover it seems now the observations under VER and ORE are biasing the regression line.
+
+(d) 
+```{r}
+reg82d<- lm(appspc~unemployrate+factor(year), data=peacecorp_c)
+summary(reg82d)
+```
+Now the results suggests that unemployment rate is negatively relate to the application to peace corps: when controlling for the year-specific effects, one unit of increase in unemployment rate on average leads to 1.964 unit decrease in applications to Peace Corps from each state per capita. The P value >0.01 hence the result is statistically significant at the level of $\alpha$=0.01. 
+
+(e)
+
+```{r}
+reg82e<- lm(data=peacecorp_c, appspc~unemployrate+factor(year)+factor(state))
+tidy (reg82e) %>%
+  filter (term=="unemployrate")
+```
+Yes, the result has changed. 
+The result of two-way fixed effects is mroe preferable as it accounts for both the year-specific and the state-specific effects. 
+
+(f)
+```{r}
+reg82f<- plm(appspc~unemployrate, data=peacecorp_c, index=c("state", "year"), model="within", effect= "twoways")
+summary(reg82f)
+```
+The two results are the same, the coefficient for unemployrate is 0.8125, standard error 0.467, P value 0.0834. 
+
+### Bailey 8.5
+```{r}
+Texas<- read_csv("./Data/TexasSchoolBoard.csv")
+```
+(a)
+
+```{r}
+reg85a<- lm(data=Texas, LnAvgSalary~OnCycle)
+summary(reg85a)
+```
+The result suggests that OnCycle is on average negatively correlated with average salary. Turning OnCyle on average reduce the salary by 0.030621 and the result is statistically significant. 
+
+There is potential bias here as the assignment of on-cycle and off-cycle elections might not be randomized. As the question iteself has suggested, stronger teachers unions might be able to get off-cycle elections. One should control for this effect. 
+
+(b)
+```{r}
+reg85b<-lm(data=Texas, LnAvgSalary~  CycleSwitch+ AfterSwitch+ AfterCycleSwitch)
+summary(reg85b)
+```
+- In this difference-in-difference model, one removes the OnCycle variable as one could use CycleSwitch as the dummy for whether there is treatment of on-cycle or not, and AfterSwitch as the dummy for time. We now look at the estimate for AfterCycleSwitch, which suggests the average treatment effect is -0.00859, meaning switching to on-cycle election reduced the average teachers' wage by 0.00859. Yet the P value suggests it is not statistically significant, so we don't reject the null hypothesis.
+
+- The effect of election time on teachers' salary is displayed by the coefficient of AfterSwitch, suggesting that after 2006, there is an increase in the average salary of teachers. 
+
+- We are not able to say anything about the types of district that switched as we have not control for the district effect. Our result is the average effect on all districts, regardless of their types. 
+
+- We could suggest that salaries in all districts in the year after the switch has an average increase of 0.009303, by reading the coefficient of AfterSwitch. 
+
+(For personally note: Otherwise, if keeping the OnCycle variable, the results would suggest that the coefficient for the interaction term AfterCycleSwitch is NA, because AfterCycleSwitch is correlated with the variables of CycleSwitch and AfterSwitch- multilinearity.)
+
+(c)
+```{r}
+reg85c<-lm(data=Texas, LnAvgSalary~ CycleSwitch+ AfterSwitch+ AfterCycleSwitch+ factor(DistNumber))
+summary(reg85c)
+
+plm(LnAvgSalary~CycleSwitch+ AfterSwitch+ AfterCycleSwitch, data=Texas, index=c("DistNumber"), model = "within")
+```
+- The result suggests that the average treatment effect of switch the cyle in the post-treatment period is the coefficient of AfterCycleSwitch= -0.0085994, and the P value = 0.000108 ***. So the  effect is negative on average, that districts switching to on-cycle would experience an average reduction in teachers' wage by 0.0085994, and the result is statistically significant. 
+
+- This model does not account for time trends that could affect all districts. 
+
+(d)
+```{r}
+reg85d<-lm(data=Texas, LnAvgSalary~ CycleSwitch+ AfterSwitch+ AfterCycleSwitch+ factor(DistNumber)+ factor(Year))
+tidy(reg85d) %>% filter (term %in% c("CycleSwitch", "AfterSwitch", "AfterCycleSwitch"))
+
+```
+- The result suggests that, after controlling for both time-specific and district-specific effects, the average treatment effect in post-treatment period is -0.00859352 and P value is 1.54e-05. It suggests that teacher wages in districts switching to on-cycle election would be reduced by -0.008593520 and it is statistically significant. 
+
+- By adopting two-way fixed effects model, this model accounts for both (1)differences in preexisting attributes of switcher districts and nonswitcher districts (- the effects specific to districts- controlled by district fixed effects) and (2) differences in the post-switch years that affected all districts regardless of whether they switched (- the effects specific to the post-treatment year- controlled by time fixed effects).
+
+(e)
+Since this is aimed for post-treatment year only, we no longer use the difference in difference model. We then focus on OnCycle states. 
+```{r}
+Texas_e<- filter(Texas, AfterSwitch==1)# Subset the dataset to only last three years 
+reg85e<-lm(data= Texas_e,LnAvgSalary~ OnCycle+ factor(DistNumber)+ factor(Year)) # estimate the effect of OnCycle, with two-way fixed effects 
+summary(reg85e) 
+```
+So we are able to estimate the effect of OnCyle being -0.0061. But the result is not statistically significant. I am unsure what is the reason. 
+
+### Bailey 11.3
+```{r}
+CongressRD<-read_csv('./Data/CongressRD.csv')
+```
+(a) Endogeneity might arise because congressional ideology could be caused by both political party and other factors irrelevant to political party, for instance their income level, education, the state they are from etc. 
+
+(b) We could operationalize an RD model by setting up the 50 percent of the vote as the cutoff point. We assume that there is almost no difference between the winner in congressional election (with votes barelly over 50 percent) and the losers (with votes barelly below 50 percent). In this way, the only difference between the winners and the losers (i.e. the treatment) is winning the election. We hence fight endogeneity by making them comparable and we could see those close to the 50 percent cutoff as randomized assigned to either group of winners and losers. 
+
+(C) 
+```{r}
+ggplot (data=CongressRD, mapping=aes(x=GOP2party2010, y=Ideology)) + 
+  geom_point()
+```
+In the plot, we observe that there is discontinuity of ideology at the 50 percent cutoffpoint. This RD might indicate that congressional members might hold different ideology than non-members, regardless of the party membership. 
+
+(d)
+The original basic RD model could be written as: $y_{i} = \beta_0 + \beta_1 T_{i} + \beta_2(x_{i}-C) + \epsilon_{i}$
+where  $T_i$=1 if $X_{1i}\ge C$
+      $T_i$=0 if $X_{1i}< C$
+      
+In this particular question, the model could be written as
+$Ideology_{i} = \beta_0 + \beta_1 GOPwin2010_{i} + \beta_2(GOP2party2010_{i}-C) + \epsilon_{i}$
+where  $GOPwin2010_i$=1 if $X_{1i}\ge C$
+      $GOPwin2010_i$=0 if $X_{1i}< C$
+
+In this expression, $GOPwin2010_i$ is the dummy variable indicating whether the Republican congressional candidate i has received the treatment (i.e. win the election). 
+$GOP2party2010_{i}-C$ is our assignment variable, which indicates how much above or below the cutoff an observation is. 
+C is the cutoff and $C=0.5$ in this particular model. 
+$\beta_1$ is the estimate of the treatment effect. 
+$\beta_2$ is the slope parameter, capturing the relationship between the distance to the cutoff variable and the dependent varaible. 
+
+(e)
+
+```{r}
+CongressRD$cutoff<-0.5
+CongressRD$Assign<- CongressRD$GOP2party2010-CongressRD$cutoff
+reg113e<- lm(Ideology~GOPwin2010 + Assign , data=CongressRD)
+summary(reg113e)
+```
+In the results, we focus on the coefficient of GOPwin2010, as the $\beta_1$ in the model. 
+It suggests that the treatment (i.e. winning the congressional election) generate an increase in ideology by 0.99517 (i.e. the bump/ the discontinuity). P value <0.05 suggesting the result is statistically significant. 
+$\beta_2$ = 0.23044, suggesting the 1 unit away from the cutoff point, the ideology will change by 0.23044. 
+
+(f)
+```{r}
+CongressRD$AssignT<- CongressRD$Assign*CongressRD$GOPwin2010
+reg113f<-  lm(Ideology~GOPwin2010 + Assign+AssignT , data=CongressRD)
+summary (reg113f)
+```
+- In the result, the coefficient for GOPwin2010 is the average treatment effect - winning election increases ideology score by 0.9816. 
+The coefficient for Assign (0.52861) is the slope for untreated observations (left of the cutoff), the coefficient for AssignT (-0.48933) is the difference between the slop of trated and untreated group, and the slope for the treated observations (to the right of the cutoff) is the sum of the two coeffcient of Assign an AssignT =  0.52861-0.48933= 0.03928.
+
+```{r}
+GOP2party2010=c(0, 0.5, 0.5, 1.0)
+GOPwin2010= c(0, 0 , 1, 1)
+Assign<- c(-0.5, 0, 0, 0.5)
+AssignT<- c(0, 0, 0, 0.5)
+newdata113f<- data_frame(GOP2party2010,GOPwin2010, Assign, AssignT)
+predict113f <- predict (reg113f, newdata = newdata113f, interval="predict")
+plot113f<- cbind (newdata113f, predict113f)
+
+ggplot()+
+  geom_point(data=plot113f, mapping= aes(x=GOP2party2010, y=fit, color=GOPwin2010, size=5)) +
+  geom_point(data=CongressRD, mapping= aes( x=GOP2party2010, y=Ideology))+
+  geom_line(data=plot113f, mapping= aes(x=GOP2party2010, y=fit))
+```
+
+(g) Here I am unsure what is the unadjusted variable. I assume it is $X_i$ without deduction of $C$. But it is confusing for me how to deal with it without adjustment.. 
+
+```{r}
+CongressRD$AssignT2<- CongressRD$GOP2party2010* CongressRD$GOPwin2010
+reg113g<- lm(Ideology~GOPwin2010 + GOP2party2010 +AssignT2 , data=CongressRD)
+summary(reg113g)
+```
+The coefficient of GOPwin2010 suggests the average treatment effect of winning the election is 1.22 on ideology score and it's statistically significant. This coefficent is larger than the adjusted one. 
+The coefficient for GOP2party2010 is the slope for the whole group of 
+The coefficient for AssignT2 is the slope for 
+
+```{r}
+GOP2party2010=c(0, 0.5, 0.5, 1.0)
+GOPwin2010= c(0, 0, 1, 1)
+AssignT2<- c(0,0, 0.5, 1)
+newdata113g<- data_frame(GOP2party2010,GOPwin2010, AssignT2)
+predict113g <- predict (reg113g, newdata = newdata113g, interval="predict")
+predict113g
+```
+In comparison to the fitted value in question (f), the fitted values are the same. 
+
+(h)
+```{r}
+ggplot (data=CongressRD) +
+  geom_histogram (aes(x=GOP2party2010))
+```
+Based on the histogram, one could notice that the number of assignment variables are almost the same on the left and right sight of the cutoff of 0.5, suggesting there is not clustering of the dependent variable just above the cutoff. 
+
+(i)
+```{r}
+reg113i_1<- lm(data=CongressRD, ChildPoverty~GOPwin2010 + Assign)
+summary(reg113i_1)
+
+reg113i_2<- lm(data=CongressRD, MedianIncome~GOPwin2010 + Assign)
+summary(reg113i_2)
+
+reg113i_3<- lm(data=CongressRD, Obama2008~GOPwin2010 + Assign)
+summary(reg113i_3)
+
+reg113i_4<- lm(data=CongressRD, WhitePct~GOPwin2010 + Assign)
+summary(reg113i_4)
+```
+
+Among the four results, neither ChildPverty nor MedianIncome display significant discontinuities at the cutoff point. 
+Obama2008 has a statistically significant negative effect on ideology of congress members, but the coefficient is only -0.043398. So the result is relatively negligible. The same pattern could be observed in the case of WhitePct (statisticly significant effects but limited in magnitude). So we might suggest both Obama2008 and WhitePct might generate discontinuity at the cutoff. 
+
+
+(j)
+Here I use the adjusted assignment variable, like in question (f). 
+```{r}
+reg113j<-  lm(Ideology~GOPwin2010 + Assign+AssignT+ChildPoverty+ MedianIncome+ Obama2008+ WhitePct, data=CongressRD)
+summary (reg113j)
+```
+Like in question (i), this serves as a balance tests for disgnosing whether other variables also generate discontinuity at cutoff point and might challenge the main assumption of the RD model. Here we find that Obama2008 still have negative and statistically significant effect (i.e. discontinuity). Since the data is from 2010, after Obama was elected, it seems plausible that the ideology of congress be influenced by the presidential election result. 
+Meanwhile, while MedianIncome was not statistically significant in past test, it now displays significant discontinuity. 
+
+(k)
+```{r}
+CongressRD$Assign2<- CongressRD$Assign^2
+reg113k<-  lm(Ideology~GOPwin2010 + Assign+ Assign2 , data=CongressRD)
+summary (reg113k)
+```
+The results indicates that on average GOPwin2010 has a positive and significant effect on ideology. The coefficient for GOPwin2010 is very similar to the previous ones in basic RD model (question e) and varying slopes RD model (question f).
+
+(l)
+```{r}
+CongressRD_l<- filter (CongressRD, GOP2party2010<=0.6 & GOP2party2010>=0.4)
+reg113l<-  lm(Ideology~GOPwin2010 + Assign+ AssignT , data=CongressRD_l)
+summary(reg113l)
+```
+The coefficient of GOPwin2010 is now smaller, reduced from around 0.98 (in question(f)) to 0.89. Though it remains statistically significant, the standard error has doubled from 0.024 to 0.048. 
+Meanwhile, the coefficient of Assignment variable and interaction both changes: the standard error increases substantially so neither remain statistically significant. But we notice that the direction of correlation (i.e. positive or negative) has not changed. 
+This might be caused by the reduction of the number of observations (i.e. sample size).
+
+(m) I think none of the model is perfect. But the one in question (j) works well as it uses varying slope RD model and accounts for other potential discontinuity. It could be improved if one applies window strategy with it. 
+
+### Bailey 11.4
+```{r}
+LM<- read_csv("./Data/LudwigMiller_head_start.csv")
+```
+(a)
+The original basic RD model could be written as: $y_{i} = \beta_0 + \beta_1 T_{i} + \beta_2(x_{i}-C) + \epsilon_{i}$
+where  $T_i$=1 if $X_{1i}\ge C$
+      $T_i$=0 if $X_{1i}< C$
+      
+Here the model should be $Mortality_{i} = \beta_0 + \beta_1 HeadStart_{i} + \beta_2Poverty_{i} + \epsilon_{i}$
+where $HeadStart_i$=1 if $Poverty_{i}>0$
+      $HeadStart_i$=0 if $Poverty_{i}\leq 0$
+
+Since the Poverty variable has been transfored by subtracting cutoff and divided by 10, we no longer need C (for cutoff) here. 
+
+I expect to find that at the cutoff point of poverty, there displays a discontinuity (drop) of mortality. To the right of the cutoff point, the mortality rate could be much lower than the rate on the left. 
+
+(b)
+RD could identify a causal effect of Head Start assistance as we assume the counties with poverty close to 59.2 percent is basically the same so the treatment could be seen as randomly assigned. In this way, if we identify discontinuity at the cutoff point, we could identify there exists causality.
+
+(c)
+```{r}
+reg114c<- lm(Mortality~HeadStart+ Poverty, data=LM)
+summary (reg114c)
+```
+The results suggests that HeadStart assistance has a significant effect ($\alpha= 0.05$) on reducing mortality. 
+Poverty has a positive and significant effect on mortality. 
+
+(d)
+```{r}
+LM$PovertyT<- LM$Poverty* LM$HeadStart
+reg114d<- lm(data=LM, Mortality~ HeadStart+ Poverty+ PovertyT)
+summary(reg114d)
+```
+The effects of HeadStart Assistance is magnified but the significance level has decreased. 
+Poverty still has a positive and significant effect on mortality. 
+
+(e)
+```{r}
+LM_e<- filter (LM, Poverty<=0.8 & Poverty>=-0.8)
+reg114e<- lm(data=LM_e, Mortality~ HeadStart+ Poverty)
+summary(reg114e)
+```
+Here we find the effect of HeadStart has been increased and become statistically significant at the significance level of $\alpha=0.05$. Yet the effect of Poverty has become less significant. The standar error both increase and this might due to our narrowing down the window hence reduce the sample size. 
+
+(f)
+``` {r}
+LM$Poverty2<- LM$Poverty^2
+```
+
+(g)
+```{r}
+ggplot (data=LM, mapping = aes (x=Poverty, y= Mortality)) + geom_point()
+```
+
+(h)
+
+(i)
+
+### Bailey 13.3
+```{r}
+Bond<-read_csv("./Data/BondUpdate.csv")
+```
+(a)
+
+(b)
+
+(C)
+
+(d)
+
+(e)
+
+(f)
+
+### Bailey 15.1
+```{r}
+Olympics<- read_csv("./Data/olympics_HW.csv")
+```
+
+(a)
+
+(b)
+
+(C)
+
+(d)
+
+(e)
+
+(f)
+
+(g)
+
+(h)
+
+(i)
+
+(j)
+# References {-}
